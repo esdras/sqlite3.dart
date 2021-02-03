@@ -1,11 +1,43 @@
 part of 'implementation.dart';
 
+class TraceContext {
+  final Bindings bindings;
+  final TraceFunction function;
+  TraceContext(this.bindings, this.function);
+}
+
+Map<int, TraceContext> _trace_contexts = {};
+
+void _traceFunctionImpl(
+  int mask,
+  Pointer<Int64> context,
+  Pointer<sqlite3_stmt> stmt,
+  Pointer<Int64> nanossecs,
+) {
+  final tCtx = _trace_contexts[context.address];
+  if (tCtx == null) return;
+  final Pointer<char> expandedSql = tCtx.bindings.sqlite3_expanded_sql(stmt);
+  tCtx.function(expandedSql.readString(), nanossecs.value);
+  tCtx.bindings.sqlite3_free(expandedSql.cast<Void>());
+}
+
+Pointer<Void> _xTrace = Pointer.fromFunction<
+        Void Function(
+  Uint32,
+  Pointer<Int64>,
+  Pointer<sqlite3_stmt>,
+  Pointer<Int64> nanossecs,
+)>(_traceFunctionImpl)
+    .cast();
+
 class DatabaseImpl implements Database {
   final Bindings _bindings;
 
   final Pointer<sqlite3> _handle;
   final List<PreparedStatementImpl> _statements = [];
   final List<Pointer<Void>> _furtherAllocations = [];
+
+  TraceFunction _trace;
 
   bool _isClosed = false;
 
@@ -79,6 +111,26 @@ class DatabaseImpl implements Database {
 
   @override
   Pointer<void> get handle => _handle;
+
+  @override
+  set trace(TraceFunction f) {
+    if (_bindings.sqlite3_trace_v2 != null) {
+      _trace = f;
+      _trace_contexts[hashCode] = f == null ? null : TraceContext(_bindings, f);
+
+      _bindings.sqlite3_trace_v2(
+        _handle,
+        f == null ? 0 : 1,
+        _xTrace,
+        Pointer.fromAddress(hashCode),
+      );
+    } else {
+      print("This platform does not support sqlite tracing.");
+    }
+  }
+
+  @override
+  TraceFunction get trace => _trace;
 
   @override
   int getUpdatedRows() {
@@ -268,6 +320,8 @@ class DatabaseImpl implements Database {
   @override
   void dispose() {
     if (_isClosed) return;
+
+    _trace_contexts[hashCode] = null;
 
     _isClosed = true;
     for (final stmt in _statements) {

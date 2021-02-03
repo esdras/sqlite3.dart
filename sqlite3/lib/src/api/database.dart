@@ -5,6 +5,8 @@ import 'package:sqlite3/src/api/result_set.dart';
 import 'functions.dart';
 import 'statement.dart';
 
+typedef TraceFunction = void Function(String, int);
+
 /// An opened sqlite3 database.
 abstract class Database {
   /// The application defined version of this database.
@@ -99,4 +101,7 @@ abstract class Database {
 
   /// Closes this database and releases associated resources.
   void dispose();
+
+  void set trace(TraceFunction f);
+  TraceFunction get trace;
 }

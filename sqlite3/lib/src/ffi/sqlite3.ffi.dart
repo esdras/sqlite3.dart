@@ -177,6 +177,26 @@ typedef _sqlite3_result_text_native = Void Function(
 typedef sqlite3_result_text_dart = void Function(Pointer<sqlite3_context> ctx,
     Pointer<char> data, int length, Pointer<Void> destructor);
 
+typedef _sqlite3_trace_v2_native = Int32 Function(
+  Pointer<sqlite3>,
+  Uint32,
+  Pointer<Void>,
+  Pointer<Void>,
+);
+
+typedef sqlite3_trace_v2_dart = int Function(
+  Pointer<sqlite3> db,
+  int mask,
+  Pointer<Void> func,
+  Pointer<Void> context,
+);
+
+typedef _sqlite3_expanded_sql_native = Pointer<char> Function(
+    Pointer<sqlite3_stmt>);
+
+typedef sqlite3_expanded_sql_dart = Pointer<char> Function(
+    Pointer<sqlite3_stmt> stmt);
+
 class Bindings {
   final DynamicLibrary library;
   final sqlite3_open_v2_dart sqlite3_open_v2;
@@ -224,6 +244,12 @@ class Bindings {
   final sqlite3_result_int64_dart sqlite3_result_int64;
   final sqlite3_result_null_dart sqlite3_result_null;
   final sqlite3_result_text_dart sqlite3_result_text;
+  final sqlite3_expanded_sql_dart sqlite3_expanded_sql;
+
+  // For some reason a sqlite3_trace_v2 is not defined in Android bindings
+  sqlite3_trace_v2_dart _sqlite3_trace_v2;
+  sqlite3_trace_v2_dart get sqlite3_trace_v2 => _sqlite3_trace_v2;
+
   Bindings(this.library)
       : sqlite3_open_v2 = library.lookupFunction<_sqlite3_open_v2_native,
             sqlite3_open_v2_dart>('sqlite3_open_v2'),
@@ -347,5 +373,16 @@ class Bindings {
             sqlite3_result_null_dart>('sqlite3_result_null'),
         sqlite3_result_text = library.lookupFunction<
             _sqlite3_result_text_native,
-            sqlite3_result_text_dart>('sqlite3_result_text');
+            sqlite3_result_text_dart>('sqlite3_result_text'),
+        sqlite3_expanded_sql = library.lookupFunction<
+            _sqlite3_expanded_sql_native,
+            sqlite3_expanded_sql_dart>('sqlite3_expanded_sql') {
+    // Workaround Android's undefined symbol error.
+    try {
+      _sqlite3_trace_v2 = library.lookupFunction<_sqlite3_trace_v2_native,
+          sqlite3_trace_v2_dart>('sqlite3_trace_v2');
+    } on ArgumentError catch (e) {
+      // do nothing
+    }
+  }
 }
